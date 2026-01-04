@@ -1,0 +1,3 @@
+This repository contains the Stata code from [Moretti (2021)](https://www.aeaweb.org/articles?id=10.1257/aer.20191277), converted from .do into .txt format for easy uploading to AI tools. The original replication package is [here](https://www.openicpsr.org/openicpsr/project/140662/version/V1/view). The original paper and appendix are in readings/, and Moretti's readme is code/README.pdf.
+
+I found ten major errors in the paper. How many can you find?
