@@ -1,0 +1,6 @@
+insheet  using $main/data/apat63_99.txt
+rename patent patent_id
+sort patent_id
+save $main/data/apat63_99, replace
+summ
+

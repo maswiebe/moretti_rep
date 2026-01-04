@@ -1,0 +1,358 @@
+*****************************************************
+*****************************************************
+*****************************************************
+*****************************************************
+* 1 MONTH, 2 MONTHS, 3 MONTHS, 6 MONTHS, 2 YEARS, 3 YEARS
+******************************************************
+******************************************************
+*****************************************************
+*****************************************************
+
+
+*****************************************************
+*****************************************************
+* 1 MONTH
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id) 
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+* MONTH
+g month =  substr(app_date,6,2)
+tab month
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year month)
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year month)
+egen main_class      = mode(class),   maxmode by(inventor_id year month)
+egen main_org        = mode(org_id),  maxmode by(inventor_id year month)
+
+* COLLAPSE
+summ
+sort inventor_id year month
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year month main_org  )
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14 
+drop density* 
+drop if inventor ==.
+
+save $main/data2/data_4a, replace
+summ
+
+
+
+
+*****************************************************
+*****************************************************
+* 2 MONTHS
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id)
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+* MONTH
+g month =  substr(app_date,6,2)
+g       tmp = 1 if month=="01"  | month=="02"  
+replace tmp = 2 if month=="03"  | month=="04"  
+replace tmp = 3 if month=="05"  | month=="06"  
+replace tmp = 4 if month=="07" | month=="08" 
+replace tmp = 5 if month=="09" | month=="10"
+replace tmp = 6 if month=="11" | month=="12"
+drop month
+g month = tmp
+tab month
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year month)
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year month)
+egen main_class      = mode(class),   maxmode by(inventor_id year month)
+egen main_org        = mode(org_id),  maxmode by(inventor_id year month)        
+
+* COLLAPSE
+summ
+sort inventor_id year month
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year month main_org)
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14
+drop density*
+drop if inventor ==.
+
+save $main/data2/data_4e, replace
+summ
+
+
+*****************************************************
+*****************************************************
+* 3 MONTHS
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id)
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+* MONTH
+g month =  substr(app_date,6,2)
+g       tmp = 1 if month=="01"  | month=="02"  | month=="03" 
+replace tmp = 2 if month=="04"  | month=="05"  | month=="06"
+replace tmp = 3 if month=="07"  | month=="08"  | month=="09"
+replace tmp = 4 if month=="10" | month=="11" | month=="12"
+drop month
+g month = tmp
+drop tmp
+tab month
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year month)
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year month)
+egen main_class      = mode(class),   maxmode by(inventor_id year month)
+egen main_org        = mode(org_id),  maxmode by(inventor_id year month)
+
+* COLLAPSE
+summ
+sort inventor_id year month
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year month main_org)
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14
+drop density*
+drop if inventor ==.
+
+save $main/data2/data_4f, replace
+summ
+
+
+
+*****************************************************
+*****************************************************
+* 6 MONTH
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id)
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+
+* MONTH
+g month1 =  substr(app_date,6,2)
+g       tmp = 1 if month=="01"  | month=="02"
+replace tmp = 1 if month=="03"  | month=="04"
+replace tmp = 1 if month=="05"  | month=="06"
+replace tmp = 2 if month=="07"  | month=="08"
+replace tmp = 2 if month=="09"  | month=="10"
+replace tmp = 2 if month=="11" | month=="12"
+g month = tmp
+drop tmp month1
+tab month
+
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year month)
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year month)
+egen main_class      = mode(class),   maxmode by(inventor_id year month)
+egen main_org        = mode(org_id),  maxmode by(inventor_id year month)
+
+* COLLAPSE
+summ
+sort inventor_id year month
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year month main_org)
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14
+drop density* 
+drop if inventor ==.
+
+save $main/data2/data_4b, replace
+summ
+
+
+
+
+
+*****************************************************
+*****************************************************
+* 2 YEARS
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id) 
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+
+g tmp = int(year/2) * 2
+drop year
+rename tmp year
+tab year
+
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year )
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year )
+egen main_class      = mode(class),   maxmode by(inventor_id year )
+egen main_org        = mode(org_id),  maxmode by(inventor_id year )
+
+* COLLAPSE
+summ
+sort inventor_id year 
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year main_org)
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14 
+drop density* 
+drop if inventor ==.
+
+save $main/data2/data_4c, replace
+summ
+
+
+
+
+
+
+*****************************************************
+*****************************************************
+* 3 YEARS
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+
+* When a patent is joint, I split it among inventors
+egen tmp7 = count(inventor_id), by(patent_id)
+summ tmp7, detail
+tab tmp7 if tmp7 <=20
+g number = 1/tmp7
+replace citations = citations / tmp7
+drop tmp
+
+
+g tmp = int(year/3) * 3
+drop year
+rename tmp year
+tab year
+
+
+* MODE
+egen main_bea        = mode(bea),     maxmode by(inventor_id year )
+egen main_zd         = mode(zd2),     maxmode by(inventor_id year )
+egen main_class      = mode(class),   maxmode by(inventor_id year )
+egen main_org        = mode(org_id),  maxmode by(inventor_id year )
+
+* COLLAPSE
+summ
+sort inventor_id year
+collapse main_bea main_zd main_class general original (sum) number citat, by(inventor_id year main_org)
+
+rename main_bea bea_code
+rename main_zd zd2
+rename main_class class
+rename main_org org_new
+
+
+* MERGE
+sort bea zd year
+merge m:1 bea zd year using $main/data2/density14_3
+tab _merge
+drop _merge
+
+* SAVE
+g Den_bea_zd = density14
+drop density* 
+drop if inventor ==.
+
+save $main/data2/data_4d, replace
+summ
+
+

@@ -1,0 +1,333 @@
+
+********************************************************************
+********************************************************************
+********************************************************************
+* RANKINGS, SUMMARY STATS, BINSCATTER  and COUNTERFACTUALS
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+********************************************************************
+********************************************************************
+******************************
+* TOP PATENTERS
+******************************
+********************************************************************
+********************************************************************
+u $main/data2/organizations_3.dta
+collapse (sum) org_N, by(org_norm)
+gsort -org_N
+g n = _n
+keep if n <= 25
+list
+
+outfile  org_norm org_N using tables2/table4.txt, replace
+outsheet org_norm org_N using tables2/table4.csv, replace comma
+
+
+
+********************************************************************
+********************************************************************
+******************************
+* CLUSTER SIZE 
+******************************
+********************************************************************
+********************************************************************
+clear
+u $main/data2/density14_3
+
+* Some city-industry are not in the data because they have no patents. 
+* Thus, I am missing some of the 0's
+* Here I fillin do that I have every combinatiuon of city zd and year
+* and I add the 0's
+fillin bea_code zd2 year
+replace density14  =0 if density14 ==. 
+replace density14B =0 if density14B ==.
+
+
+* Add zd name and bea name
+g       zd_name = "Biology and Chemestry" if zd2 ==1
+replace zd_name = "Computer Science"      if zd2 ==2
+replace zd_name = "Other Egineering"      if zd2 ==3
+replace zd_name = "Other Science"         if zd2 ==4
+replace zd_name = "Semiconductors"        if zd2 ==5
+
+sort bea_code
+merge m:1 bea_code using $main/data/bea_codes
+drop if _merge ==2
+drop _merge
+
+
+* Density Distribution
+summ density14 if year ==2007 & zd_name == "Biology and Chemestry" , detail
+summ density14 if year ==2007 & zd_name == "Computer Science" , detail
+summ density14 if year ==2007 & zd_name == "Other Egineering" , detail
+summ density14 if year ==2007 & zd_name == "Other Science" , detail
+summ density14 if year ==2007 & zd_name == "Semiconductors" , detail
+
+
+sort bea_code zd2 year
+save $main/tables2/data, replace
+
+
+* TOP 10
+g top10 =0
+gsort year zd2 -density14
+by year zd2: replace top10 = 1 if _n >=1 & _n <=10
+egen top10_sum = sum(density14) if top10 ==1, by(year zd_name)
+
+summ top10_sum if year ==2007 & top10 ==1 & zd_name == "Semiconductors"
+summ top10_sum if year ==2007 & top10 ==1 & zd_name == "Computer Science"
+summ top10_sum if year ==2007 & top10 ==1 & zd_name == "Biology and Chemestry"
+
+
+sort year 
+collapse top10_sum, by(year zd_name)
+keep if year ==1971 | year ==1980 | year ==1990 | year ==2000 | year ==2007
+
+sort year
+line top10_sum  year if zd_name == "Semiconductors", legend(off) ytitle("") xtitle("")
+graph export fig7.pdf, replace
+! mv -f fig7.pdf tables2/
+
+line top10_sum  year if zd_name == "Computer Science", legend(off) ytitle("") xtitle("")
+graph export fig8.pdf, replace
+! mv -f fig8.pdf tables2/
+
+line top10_sum  year if zd_name == "Biology and Chemestry", legend(off) ytitle("") xtitle("")
+graph export fig9.pdf, replace
+! mv -f fig9.pdf tables2/
+
+
+
+
+
+************************************
+***********************************
+* PRODUCTIVITY
+************************************
+***********************************
+clear
+u $main/data2/data_3
+egen total = sum(number), by(inventor)
+
+* INCLUDE THE FOLLOWING 5 LINES IF YOU DON'T WANT INTERPOLATED DATA
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+
+************************
+************************
+* DEFINE  Y 
+***********************
+***********************
+* NUMBER OF PATENTS IN A YEAR
+g y = log(number)
+
+
+
+***********************
+***********************
+* DEFINE   X
+***********************
+***********************
+* NUMBER OF SCIENTISTS
+*g x    = Den_bea_zd
+*g x2   = Den_bea_class
+g x   = log(Den_bea_zd    )
+*g x2  = log(Den_bea_class )
+
+* NUMBER OF FIRMS
+*g x  = Den_bea_zdB 
+*g x2 = Den_bea_classB
+
+
+***********************
+***********************
+***********************
+***********************
+keep if total  >=3.25
+
+
+
+********************************************************************
+********************************************************************
+* SUMMARY STATS FOR SAMPLE
+********************************************************************
+********************************************************************
+egen cluster1               = group(bea zd)
+keep if number~=. & zd2 ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=.
+
+g       corporate = 0 if org_type ~=""    & org_type ~="OT"
+replace corporate = 1 if org_type =="FI" 
+
+summ y  Den_bea_zd number total corporate
+
+* FIELD
+tab zd2
+
+
+* FIRM TYPE
+* FI      Firm
+*UN      University
+*NL      National Lab
+*RI      Research Institute
+*UG      US Government
+*HO      Hospital
+*AS      Academy of Science
+*NO      No organization recorded
+*SC      Schools (less than university level)
+*OT      Other
+tab org_type
+
+
+*******************************************************************
+********************************************************************
+*******************************
+* BINSCATTERS
+*******************************
+*******************************************************************
+********************************************************************
+ssc install binscatter
+
+binscatter y x, nquantiles(40) controls(i.bea i.year i.zd)  reportreg
+graph export figure4.pdf, replace
+! mv -f figure4.pdf tables2/
+
+
+
+
+*******************************************************************
+********************************************************************
+*******************************
+* COLLAPSE AND MERGE WITH DENSITY DATA THAT HAVE EVERY 
+* COMBINATION OF CITY-ZD-YEAR
+*
+* DATA HAVE ALL COMBINATION OF CITY-ZD-YEAR
+* I ADD 0's. THIS WAY I DO NOT DROP CELLS WITH NO PATENTS
+*
+*******************************
+*******************************
+*******************************************************************
+********************************************************************
+* COLLAPSE
+sort year bea_code zd2
+collapse y x numbe , by(year bea_co zd2)
+summ
+save $main/tmp, replace
+
+* Merge with all combinations of bea_code zd2 year
+clear
+u $main/tables2/data
+sort bea_code zd2 year
+merge 1:1  bea_code zd2 year using $main/tmp
+drop _merge
+! rm $main/tmp.dta
+rename density14 Den_bea_zd
+rename density14B Den_bea_zdB
+
+
+* I add the 0's
+replace number    = 0             if number    ==.
+
+
+*********************************
+* RANKINGS OF SIZE
+*********************************
+gsort year -Den_bea_zd
+outfile  bea_name Den_bea_zd  if year ==2007 & zd_name == "Semiconductors" using tables2/table2b.txt, replace
+outsheet bea_name Den_bea_zd  if year ==2007 & zd_name == "Semiconductors" using tables2/table2b.csv, replace comma
+
+outfile  bea_name Den_bea_zd  if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table2c.txt, replace
+outsheet bea_name Den_bea_zd  if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table2c.csv, replace comma
+
+outfile  bea_name Den_bea_zd  if year ==2007 & zd_name == "Computer Science" using tables2/table2d.txt, replace
+outsheet bea_name Den_bea_zd  if year ==2007 & zd_name == "Computer Science" using tables2/table2d.csv, replace comma
+
+
+
+*******************************************************************
+********************************************************************
+*******************************
+* COUNTERFACTUALS 
+*******************************
+*******************************************************************
+********************************************************************
+drop _fillin Den_bea_zdB 
+
+* Estimated elasticity
+g alpha = 0.067
+
+* PERCENTILES
+egen tmp95 = pctile(Den_bea_zd), p(95) by(year zd2)
+egen tmp90 = pctile(Den_bea_zd), p(90) by(year zd2)
+egen tmp75 = pctile(Den_bea_zd), p(75) by(year zd2)
+egen tmp50 = pctile(Den_bea_zd), p(50) by(year zd2)
+egen tmp25 = pctile(Den_bea_zd), p(25) by(year zd2)
+
+
+* This is the counterfactual cluster size. 
+* I need to do the mean, so that the total 
+* number of scientsis in the US in the 
+* counterfactual is = to observed number
+* I can't do median because it would change it
+egen mean = mean(Den_bea_zd), by(year zd2)
+
+
+* A log log model implies that the agglomeration effect in absolute amount of patents is cluster size to alpha
+* DD is estimated change in inventor productivity, measured in number of patents (not percent)
+g DD =   (mean^alpha) - (Den_bea_zd^alpha)
+* This is the percent change 
+g DDD = (mean^alpha - Den_bea_zd^alpha)*100/(Den_bea_zd^alpha)
+
+* XXX TABLE 11
+summ  DDD     if Den_bea_zd <=tmp25                       & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp25  & Den_bea_zd <= tmp50 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp50  & Den_bea_zd <= tmp75 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp75  & Den_bea_zd <= tmp90 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp90  & Den_bea_zd <= tmp95 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp95                        & Den_bea_zd ~=.
+drop tmp* 
+
+
+gsort year -Den_bea_zd
+outfile  bea_name DDD     if year ==2007 & zd_name == "Semiconductors"        using tables2/table3b.txt, replace
+outsheet bea_name DDD     if year ==2007 & zd_name == "Semiconductors"        using tables2/table3b.csv, replace comma
+outfile  bea_name DDD     if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table3c.txt, replace
+outsheet bea_name DDD     if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table3c.csv, replace comma
+outfile  bea_name DDD     if year ==2007 & zd_name == "Computer Science"      using tables2/table3d.txt, replace
+outsheet bea_name DDD     if year ==2007 & zd_name == "Computer Science"      using tables2/table3d.csv, replace comma
+
+
+* Change
+g ZZ =  Den_bea_zd*DD
+g ZZZ = Den_bea_zd*(Den_bea_zd^alpha)
+preserve
+collapse (sum)  ZZ ZZZ, by(year zd_name)
+
+* Aggregate effect by field
+* XXX TABLE 12 col 1
+g change = ZZ / ZZZ
+list zd change if year ==2007
+
+
+* Aggregate effect -- All fields
+* XXX TABLE 12  col 1
+restore
+collapse (sum) ZZ ZZZ, by(year)
+g change = ZZ / ZZZ
+list change if year ==2007
+
+

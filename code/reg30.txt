@@ -1,0 +1,161 @@
+********************************************************************
+********************************************************************
+********************************************************************
+* INTERPOLATION
+* log(1+patents)
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+u $main/data2/data_3
+egen total = sum(number), by(inventor)
+
+
+* BY COMMENTING OUT THESE 6 LINES,
+* I DO NOT DROP INTERPOLATED DATA
+*replace bea    =. if inter_bea   ==1
+*replace zd     =. if inter_zd    ==1
+*replace class  =. if inter_class ==1
+*replace bea    =. if inter_bea2  ==1
+*replace zd     =. if inter_zd2   ==1
+*replace class  =. if inter_class2==1
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* OPTIONS
+********************************************************************
+********************************************************************
+********************************************************************
+
+************************
+************************
+* DEFINE  Y 
+***********************
+***********************
+* NUMBER OF PATENTS IN A YEAR
+g y = log(number)
+
+* CITATIONS
+*g y2 = log(citations+00001)
+g y2 = log(citations)
+
+* SPECIALIZATION
+*g y = 1-general
+
+
+***********************
+***********************
+* DEFINE   X
+***********************
+***********************
+* NUMBER OF SCIENTISTS
+*g x    = Den_bea_zd
+*g x2   = Den_bea_class
+g x   = log(Den_bea_zd    )
+g x2  = log(Den_bea_class )
+
+* NUMBER OF FIRMS
+*g x  = Den_bea_zdB 
+*g x2 = Den_bea_classB
+
+
+***********************
+***********************
+* DEFINE STAR INVENTORS
+***********************
+***********************
+*keep if total  >=3.25
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* NEW VARIABLES
+********************************************************************
+********************************************************************
+********************************************************************
+egen cluster1               = group(bea zd)
+egen cluster0               = group(bea zd year)
+egen cluster2               = group(bea )
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_class      = group(bea class)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_bea_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen org_new                = group(org_id)
+egen cluster_org_year       = group(org_new year)
+egen org_size               = count(inventor), by(org_new year)
+egen lab_size              = count(inventor), by(org_new year bea)
+
+sort inventor year
+by inventor : g  x_m1 = x[_n-1]
+by inventor : g  x_m2 = x[_n-2]
+by inventor : g  x_m3 = x[_n-3]
+by inventor : g  x_m4 = x[_n-4]
+by inventor : g  x_m5 = x[_n-5]
+by inventor : g  x_p1 = x[_n+1]
+by inventor : g  x_p2 = x[_n+2]
+by inventor : g  x_p3 = x[_n+3]
+by inventor : g  x_p4 = x[_n+4]
+by inventor : g  x_p5 = x[_n+5]
+by inventor : g  x2_m1 = x2[_n-1]
+by inventor : g  x2_m2 = x2[_n-2]
+by inventor : g  x2_m3 = x2[_n-3]
+by inventor : g  x2_m4 = x2[_n-4]
+by inventor : g  x2_m5 = x2[_n-5]
+by inventor : g  x2_p1 = x2[_n+1]
+by inventor : g  x2_p2 = x2[_n+2]
+by inventor : g  x2_p3 = x2[_n+3]
+by inventor : g  x2_p4 = x2[_n+4]
+by inventor : g  x2_p5 = x2[_n+5]
+
+
+
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* INTERPOLATED DATA
+********************************************************************
+********************************************************************
+********************************************************************
+
+* I ADD THE 0's IN INTERPOLATED YEARS
+drop y
+g y = log(number+1)
+replace y = log(1) if inter_bea ==1 | inter_zd ==1 | inter_class ==1
+replace y = log(1) if inter_bea2==1 | inter_zd2==1 | inter_class2==1
+
+
+sort inventor year
+by inventor: g  inter_org = 1   if org_new ==. & org_new[_n-1] == org_new[_n+1] & org_new[_n-1] ~=.
+by inventor: replace org_new = org_new[_n-1] if inter_org ==1
+
+by inventor: g  inter_org2 = 1  if org_new ==. & org_new[_n-1] ==. & org_new[_n-2] == org_new[_n+1] & org_new[_n-2] ~=.
+by inventor: replace org_new = org_new[_n-2] if inter_org2 ==1
+
+
+* This is the baseline. It shpould be equal to the main table with no interpolation
+eststo: reghdfe y x if total >=3.25 & inter_bea   ==0 & inter_zd ==0 & inter_class==0 & inter_bea2  ==0 & inter_zd2==0 & inter_class2==0 & inter_org ~=1 & inter_org2 ~=1, absorb(year bea zd class cluster_bea_year cluster_zd_year inventor cluster1 cluster_bea_class cluster_class_year org_new) cluster(cluster1) keepsin 
+
+* This regression uses interpolated data: 1 year
+eststo: reghdfe y x if total >=3.25 & inter_bea2  ==0 & inter_zd2==0 & inter_class2==0 & inter_org2 ~=1, absorb(year bea zd class cluster_bea_year cluster_zd_year inventor cluster1 cluster_bea_class cluster_class_year org_new) cluster(cluster1) keepsin 
+
+* This regression uses interpolated data: 2 year2
+eststo: reghdfe y x if total >=3.25, absorb(year bea zd class cluster_bea_year cluster_zd_year inventor cluster1 cluster_bea_class cluster_class_year org_new) cluster(cluster1) keepsin 
+
+esttab using tables30/table1.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables30/table1.txt, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+

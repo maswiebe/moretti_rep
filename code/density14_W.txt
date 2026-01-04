@@ -1,0 +1,177 @@
+********************************************************************
+********************************************************************
+* Measures of cluster size that put some weight on qualty of
+* inventors (as opposed just their raw number)
+*******************************************************************
+********************************************************************
+
+
+
+***********************************************
+***********************************************
+* CLEAN THE DATA
+***********************************************
+***********************************************
+u $main/data/COMETS_Patent_ExtractForEnrico
+
+keep if year >1970 & year <=2007
+egen inventor_id = group(inventor)
+drop if inventor_id ==.
+drop if class ==.
+
+drop if bea =="NOCOUNTRY"
+drop if bea =="OTHER_USA"
+drop if bea =="UNITED STATES"
+destring bea, replace
+drop if bea ==.
+drop if bea ==0
+
+* ZD is the broad technology class
+* Here I create a ZD2 which is the numeric version 
+egen zd2 = group(zd)
+tab zd zd2
+drop if zd2 ==.
+
+
+* Cases of  patents with multiple inventors
+*egen N = count(year), by(inventor_id patent_id)
+*summ N
+*drop N
+
+* MERGE WITH NBER PATENT DATA
+sort patent
+merge m:m patent using $main/data/apat63_99
+tab _merge
+summ
+drop _merge
+drop if inventor_id ==.
+
+
+
+****************************************************************
+*****************************************************************
+* DATA CHECK:
+* MULTIPLE CITIES AND TECHNOLOGY PER YEAR
+****************************************************************
+*****************************************************************
+* I drop if number of different cities or zd in a given year too large
+g N = 1
+sort inventor year bea
+by inventor year: replace N = N[_n-1] + 1 if bea ~= bea[_n-1] & _n >1
+egen NN = max(N), by(inventor)
+drop if NN > 3 & NN ~=.
+drop N NN
+
+g N = 1
+sort inventor year zd2
+by inventor year: replace N = N[_n-1] + 1 if zd2 ~= zd2[_n-1] & _n >1
+egen NN = max(N), by(inventor year)
+drop if NN > 3 & NN ~=.
+drop N NN
+
+
+***********************************************
+***************************************************
+* MEASURES OF CLUSTERS DENSITY
+* WEIGHTED
+***************************************************
+***************************************************
+drop zd
+
+
+* number of lifetime citations and patents, by inventor
+egen M = sum(citations), by(inventor_id )
+egen MM = count(patent_id), by(inventor_id)
+* The data are at the patent level. I want to count inventors
+sort inventor_id year bea zd
+by inventor_id year bea zd: g d1 = 1 if _n ==1
+keep if d1 ==1
+
+
+summ M MM, detail
+* K's and H's are indicators if an inventor has lifetime patents or citations 
+* above a thereshold
+g K = 0
+g K2 = 0
+g K3 = 0
+g H = 0
+g H2 = 0
+g H3 = 0
+
+replace K =  d1 if M >= 5
+replace  K2 = d1 if M >= 10
+replace  K3 = d1 if M >= 20
+
+replace H =  d1 if MM >= 3
+replace  H2 = d1 if MM >= 5
+replace  H3 = d1 if MM >= 10
+
+egen count = sum(K), by(bea zd year)
+egen total = sum(K), by(zd year)
+g density14_W1 = (count-K)/(total-K)
+drop count total 
+
+egen count = sum(K2), by(bea zd year)
+egen total = sum(K2), by(zd year)
+g density14_W2 = (count-K2)/(total-K2)
+drop count total
+
+egen count = sum(K3), by(bea zd year)
+egen total = sum(K3), by(zd year)
+g density14_W3 = (count-K3)/(total-K3)
+drop count total
+
+
+egen count = sum(H), by(bea zd year)
+egen total = sum(H), by(zd year)
+g density14_WW1 = (count-H)/(total-H)
+drop count total
+
+egen count = sum(H2), by(bea zd year)
+egen total = sum(H2), by(zd year)
+g density14_WW2 = (count-H2)/(total-H2)
+drop count total
+
+egen count = sum(H3), by(bea zd year)
+egen total = sum(H3), by(zd year)
+g density14_WW3 = (count-H3)/(total-H3)
+drop count total
+
+
+g Den_bea_zd_W1 = density14_W1
+g Den_bea_zd_W2 = density14_W2
+g Den_bea_zd_W3 = density14_W3
+g Den_bea_zd_WW1 = density14_WW1
+g Den_bea_zd_WW2 = density14_WW2
+g Den_bea_zd_WW3 = density14_WW3
+drop density14_W*
+
+
+***********************************************
+* WEIGHTS
+***********************************************
+egen count = sum(M), by(bea zd year)
+egen total = sum(M), by(zd year)
+g density14_W4 = (count-M)/(total-M)
+*replace density14_W4 = 0 if density14_W4 <0
+drop count total
+
+egen count = sum(MM), by(bea zd year)
+egen total = sum(MM), by(zd year)
+g density14_WW4 = (count-MM)/(total-MM)
+*replace density14_WW4 = 0 if density14_WW4 <0
+
+collapse density14_W4 density14_WW4 Den_bea_zd_W1 Den_bea_zd_W2  Den_bea_zd_W3 Den_bea_zd_WW1 Den_bea_zd_WW2  Den_bea_zd_WW3, by(inventor_id year)
+g Den_bea_zd_W4 = density14_W4
+g Den_bea_zd_WW4 = density14_WW4
+sort  inventor_id year
+save $main/data2/density14_W, replace
+summ
+
+
+
+
+
+
+
+

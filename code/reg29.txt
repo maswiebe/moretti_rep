@@ -1,0 +1,215 @@
+
+********************************************************************
+********************************************************************
+********************************************************************
+* COUNTERFACTUAL WITH CURVATURE
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+************************************
+***********************************
+* PRODUCTIVITY
+************************************
+***********************************
+clear
+u $main/data2/data_3
+egen total = sum(number), by(inventor)
+
+* INCLUDE THE FOLLOWING 5 LINES IF YOU DON'T WANT INTERPOLATED DATA
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+
+************************
+************************
+* DEFINE  Y 
+***********************
+***********************
+* NUMBER OF PATENTS IN A YEAR
+g y = log(number)
+
+
+
+***********************
+***********************
+* DEFINE   X
+***********************
+***********************
+* NUMBER OF SCIENTISTS
+*g x    = Den_bea_zd
+*g x2   = Den_bea_class
+g x   = log(Den_bea_zd    )
+*g x2  = log(Den_bea_class )
+
+* NUMBER OF FIRMS
+*g x  = Den_bea_zdB 
+*g x2 = Den_bea_classB
+
+
+***********************
+***********************
+* DEFINE STAR INVENTORS
+***********************
+***********************
+keep if total  >=3.25
+
+
+
+*******************************************************************
+********************************************************************
+
+* THESE ARE THE 4 GROUPS USED IN THE ANALYSIS 
+* OF HETEROEGENITY BY CLUSTER SIZE
+summ x, detail
+egen pctile25 = pctile(x), p(25) by(zd2 year)
+egen pctile50 = pctile(x), p(50) by(zd2 year)
+egen pctile75 = pctile(x), p(75) by(zd2 year)
+g dd1 = 0
+g dd2 = 0
+g dd3 = 0
+g dd4 = 0
+replace dd1 =1 if x                <= pctile25
+replace dd2 =1 if x > pctile25 & x <= pctile50
+replace dd3 =1 if x > pctile50 & x <= pctile75
+replace dd4 =1 if x > pctile75
+
+
+
+
+
+*******************************************************************
+********************************************************************
+*******************************
+* COLLAPSE AND MERGE WITH DENSITY DATA THAT HAVE EVERY 
+* COMBINATION OF CITY-ZD-YEAR
+*
+* DATA HAVE ALL COMBINATION OF CITY-ZD-YEAR
+* I ADD 0's. THIS WAY I DO NOT DROP CELLS WITH NO PATENTS
+*
+*******************************
+*******************************
+*******************************************************************
+********************************************************************
+* COLLAPSE
+sort year bea_code zd2
+collapse y x numbe dd1 dd2 dd3 dd4, by(year bea_co zd2)
+summ
+
+tab dd1
+tab dd2 
+tab dd3
+tab dd4
+save tmp, replace
+
+* Merge with all combinations of bea_code zd2 year
+clear
+u tables2/data
+sort bea_code zd2 year
+merge 1:1  bea_code zd2 year using tmp
+drop _merge
+! rm tmp.dta
+rename density14 Den_bea_zd
+rename density14B Den_bea_zdB
+
+
+*egen minx = min(x)
+*egen miny = min(y)
+* I add the 0's
+replace number    = 0             if number    ==.
+*replace x         = 0.00001       if x         ==.
+*drop minx miny
+
+
+
+*******************************************************************
+********************************************************************
+*******************************
+* COUNTERFACTUALS 
+*******************************
+*******************************************************************
+********************************************************************
+drop _fillin Den_bea_zdB 
+
+
+
+* These are eintries  in the table on heterogenety by cluster size
+g       alpha = 0.0685 if dd1 ==1 
+replace alpha = 0.0743 if dd2 ==1
+replace alpha = 0.0720 if dd3 ==1
+replace alpha = 0.0776 if dd4 ==1
+
+
+
+
+* PERCENTILES
+egen tmp95 = pctile(Den_bea_zd), p(95) by(year zd2)
+egen tmp90 = pctile(Den_bea_zd), p(90) by(year zd2)
+egen tmp75 = pctile(Den_bea_zd), p(75) by(year zd2)
+egen tmp50 = pctile(Den_bea_zd), p(50) by(year zd2)
+egen tmp25 = pctile(Den_bea_zd), p(25) by(year zd2)
+
+
+* This is the counterfactual cluster size. 
+* I need to do the mean, so that the total 
+* number of scientsis in the US in teh 
+* counterfactual is = to observed number
+* I can't do median because it would change it
+egen mean = mean(Den_bea_zd), by(year zd2)
+
+
+* A log log model implies that the agglomeration effect in absolute amount of patents is cluster size to alpha
+* DD is estimated change in inventor productivity, measured in number of patents (not percent)
+g DD =   (mean^alpha) - (Den_bea_zd^alpha)
+* This is the percent change 
+g DDD = (mean^alpha - Den_bea_zd^alpha)*100/(Den_bea_zd^alpha)
+
+summ  DDD     if Den_bea_zd <=tmp25                       & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp25  & Den_bea_zd <= tmp50 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp50  & Den_bea_zd <= tmp75 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp75  & Den_bea_zd <= tmp90 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp90  & Den_bea_zd <= tmp95 & Den_bea_zd ~=.
+summ  DDD     if Den_bea_zd >tmp95                        & Den_bea_zd ~=.
+drop tmp* 
+
+
+gsort year -Den_bea_zd
+*outfile  bea_name DDD     if year ==2007 & zd_name == "Semiconductors"        using tables2/table3b.txt, replace
+*outsheet bea_name DDD     if year ==2007 & zd_name == "Semiconductors"        using tables2/table3b.csv, replace comma
+*outfile  bea_name DDD     if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table3c.txt, replace
+*outsheet bea_name DDD     if year ==2007 & zd_name == "Biology and Chemestry" using tables2/table3c.csv, replace comma
+*outfile  bea_name DDD     if year ==2007 & zd_name == "Computer Science"      using tables2/table3d.txt, replace
+*outsheet bea_name DDD     if year ==2007 & zd_name == "Computer Science"      using tables2/table3d.csv, replace comma
+
+
+* Change
+g ZZ =  Den_bea_zd*DD
+g ZZZ = Den_bea_zd*(Den_bea_zd^alpha)
+preserve
+collapse (sum)  ZZ ZZZ, by(year zd_name)
+
+* Aggregate effect by field
+* XXX TABLE 12 col 2
+g change = ZZ / ZZZ
+list zd change if year ==2007
+
+
+* Aggregate effect -- All fields
+* XXX TABLE 12 col 2
+restore
+collapse (sum) ZZ ZZZ, by(year)
+g change = ZZ / ZZZ
+list change if year ==2007
+
+

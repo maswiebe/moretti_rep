@@ -1,0 +1,271 @@
+
+********************************************************************
+********************************************************************
+********************************************************************
+* KODAK 
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+*******************************************************
+*****************************************
+*****************************************
+* GRAPHS: KODAK INVENTORS IN ROCHESTER
+*****************************************
+*****************************************
+*******************************************************
+* Number of inventors in Kodak in Rochester
+u $main/data2/data_patent_level_3
+g       kodak = 0
+replace kodak = 1 if org_id =="FI_1757"
+keep if kodak ==1 & bea_code ==139
+sort inventor_id year  
+by inventor_id year : g d1 = 1 if _n ==1
+egen count = count(d1), by(year)
+g kodak_tot = count
+
+collapse kodak_tot, by(year)
+
+keep if year >=1990
+line kodak_tot  year, ytitle("") xtitle("")
+graph export fig1.pdf, replace
+! mv -f fig1.pdf tables3/
+
+
+
+* Total number of inventors in Rochester
+clear
+u $main/data2/data_patent_level_3
+keep if bea_code ==139
+sort inventor_id year 
+by inventor_id year : g d1 = 1 if _n ==1
+egen count = count(d1), by(year)
+g rochester_tot = count
+collapse rochester_tot, by(year)
+keep if year >=1990
+list if year ==1996 | year ==2007
+
+
+
+********************************************************
+*********************************************
+****************************************
+* LIST OF PATENTING COMPANIES IN  ROCHESTER 
+*****************************************
+*********************************************
+********************************************************
+* Top patenters in Rochester outside Kodaak and Xerox in 1996
+clear
+u $main/data2/organizations_3
+keep if bea ==139 & year == 1996
+drop if org_id =="FI_1757" | org_id =="FI_6225"
+gsort  -org_N
+list org_norm org_N if org_N >10
+
+
+
+********************************************************
+*****************************************
+*****************************************
+* PRODUCTIVITY 
+*****************************************
+*****************************************
+********************************************************
+clear
+u $main/data2/data_3 
+
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_bea_class      = group(bea class)
+
+
+
+******************************************************************************
+* SAMPLE
+* I KEEP ONLY NON-KODAK INVENTORS
+* I KEEP ONLY 96 and 07
+******************************************************************************
+g kodak = 1 if org_id =="FI_1757"
+g xerox = 1 if org_id =="FI_6225"
+
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+keep if kodak ~=1
+drop if class ==396 | class ==399 
+keep if year ==1996 | year ==2007
+
+* DUMMIES
+****************
+* rochester dummy
+g roch = 0
+replace roch = 1 if bea ==139
+
+* dummy for 2007
+g       after = 0 if year ==1996
+replace after = 1 if year ==2007
+
+* Rochester * 2007
+g roch_after = roch*after
+
+
+
+*****************
+* CROSS-SECIONAL
+* DIFF IN DIFF
+*****************
+g cluster3 = bea
+preserve
+eststo:      reg y roch_after after roch,                                                      cluster(cluster3)  
+eststo: reghdfe  y roch_after after roch, absorb(zd)                                           cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster_zd_year)                              cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin 
+
+esttab using tables3/table2.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables3/table2, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+***************************
+* 2SLS
+***************************
+* First stage Effect on cluster size
+eststo: reg x roch_after after roch,                                                      cluster(cluster3)
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch, absorb(zd)                                           cluster(cluster3) keepsin
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch, absorb(cluster_zd_year)                              cluster(cluster3) keepsin
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch, absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin
+test roch_after ==0
+esttab using tables3/table5.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables3/table5, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+* IV
+eststo: ivreg     y (x =roch_after) after roch,                                  cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch, absorb(zd                      ) cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch, absorb(cluster_zd_year         ) cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch, absorb(cluster1 cluster_zd_year) cluster(cluster3) 
+esttab using tables3/table6.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables3/table6, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+**********************************************
+****************************************
+* WITHIN INVENTOR DIFFERENCES
+* I ONLY KEEP INVENTORS OBSERVED IN 1996 and 2007
+*****************************************
+**********************************************
+restore
+egen zzz = count(y), by(inventor)
+tab zzz
+keep if zzz ==2
+drop zzz
+preserve
+
+
+* New rochester dummy for rochester status in 1996
+* Note: if in Rochester in 1996, this dummy stays =1 both in 1996 and  2007
+drop roch roch_after
+g       tmp6 = 0
+replace tmp6 = 1 if bea ==139 & year == 1996
+egen roch = max(tmp6), by(inventor)
+g roch_after = roch*after
+
+eststo: reghdfe  y roch_after after roch, absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables3/table3.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables3/table3, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+* New rochester dummy for rochester status in 1996 and 2007
+* Note: it is =1 only of inventor is in rochester both in 1996 and  2007
+clear
+restore
+preserve
+drop roch roch_after
+
+g tmp6 = 1 if bea ==139 & year == 1996
+g tmp7 = 1 if bea ==139 & year == 2007
+egen tmp8 = max(tmp6), by(inventor)
+egen tmp9 = max(tmp7), by(inventor)
+g roch = 0
+replace roch = 1 if tmp8 ==1 & tmp9 ==1
+g roch_after = roch*after
+drop tmp*
+
+eststo: reghdfe  y roch_after after roch, absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables3/table4.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables3/table4, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+
+******************************************************************************
+******************************************************************************
+* PRODUCTIVITY FIGURES
+******************************************************************************
+******************************************************************************
+clear
+u $main/data2/data_3
+
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+g y = log(number)
+
+egen cluster1               = group(bea zd)
+g kodak = 1 if org_id =="FI_1757"
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+keep if kodak ~=1
+keep if bea_code ==139
+
+
+* RESIDUALIZED PRODUCTIVITY
+xi: areg y , absorb(class)
+predict fit3, xbd
+g e3 = y-fit3
+
+collapse y e3 , by(year bea)
+
+* FIGURES
+line e3  year if year >=1990 & bea ==139, xline(1996) yscale(r(-.3 .1))  ylabel(-.3 -.2 -.1 0 .1) ytitle("") xtitle("")
+graph export fig11.pdf, replace
+! mv -f fig11.pdf tables3/
+
+
+
+restore
+
+
+
+

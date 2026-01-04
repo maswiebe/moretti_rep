@@ -1,0 +1,23 @@
+u $main/data/tva1
+
+keep fips pop90 vhouse90  medfaminc90 trade90 agr90  const9 manuf90 emp90 white90
+keep if pop ~=.
+sort fips
+save tmp, replace
+
+
+clear
+insheet using $main/data/bea_county_crosswalk.txt
+rename ea bea_code
+keep fips bea
+sort fips
+merge m:1 fips using tmp
+keep if _merge ==3
+drop _merge
+
+g nonwhite90 = 1 - white90 
+collapse vhouse90  medfaminc90 trade90 agr90  const9 manuf90 nonwhite90 (sum) pop emp, by(bea)
+summ
+save $main/data/read, replace
+!rm $main/tmp.dta
+

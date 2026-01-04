@@ -1,0 +1,122 @@
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+* IV 
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+clear
+u $main/data2/data_3
+
+egen total = sum(number), by(inventor)
+
+* INCLUDE THE FOLLOWING 6 LINES IF YOU DON'T WANT INTERPOLATED DATA
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+drop if year  ==.
+drop if zd ==.
+drop if org_id == ""
+drop if bea ==.
+egen org_new2 = group(org_id)
+
+* This is the number of inventors in a  firm  in a given city (in a given field and year)
+g n = 1
+collapse (sum) n, by(year zd bea org_new)
+
+* Now the level of observation is year field city firm
+* This is the total number of inventors in a city across all firms (in a given field and year)
+egen nn = sum(n), by(year zd bea)
+
+* This is the share of  inventors in a firm in  a given city (in a given field and year)
+g share = n/nn
+summ n nn share, detail
+
+* Lagged share
+sort zd bea org_new year
+by   zd bea org_new: g share_1 = share[_n-1]
+by   zd bea org_new: g n_1 = n[_n-1]
+
+
+* The data are now at the year field city firm level
+* This is the total number of inventors by firm in the city (in a given year and field)
+* It's the same as n above
+egen r2 = sum(n), by(org_new  year zd bea)
+* This is the total number of inventors in a firm across all cities in the nation (in a given year and filed)
+egen rr2 = sum(n), by(org_new  year zd )
+* For each firm, field city and year, this is the total number of inventors that the firm has 
+* in the nation outside the relevant city (in a year)
+g DD = rr2 - r2
+
+
+
+* This is the change over time in DD
+* Note: it is non-missing only for firms that are present in a given city-field in year t-1 and t
+*       If a firm is not present in year t-1, DD1 is missing
+sort zd org_new year
+by zd org_new: g DD1 = DD - DD[_n-1]
+by zd org_new: g DD2 = (DD - DD[_n-1]) / DD[_n-1]
+by zd org_new: g DD3 = (DD - DD[_n-1]+1) / (DD[_n-1] +1)
+by zd org_new: g DD4 = (DD - DD[_n-1]+0.01) / (DD[_n-1] +0.01)
+
+
+
+* First Differences models are defined 
+* Only for Obs in Contiguous years
+sort zd bea org_new year
+by zd bea org_new: g Dyear = year - year[_n-1]
+replace share_1 = . if Dyear ~=1
+replace n_1 = . if Dyear ~=1
+replace DD1 = . if Dyear ~=1
+replace DD2 = . if Dyear ~=1
+replace DD3 = . if Dyear ~=1
+
+
+* Now I normalize  DD1 by the relevant  nationwide chnage 
+g tmp8 = DD1
+egen tmp9 = sum(tmp8), by(zd year)
+g iv8 = tmp8/tmp9
+drop tmp8 tmp9
+
+
+* * THIS IS THE TOTAL IN THE FOCAL CITY, FIELD ANF YEAR
+save $main/data2/tmp1, replace
+collapse (sum) iv8 , by(year zd bea )
+summ
+sort year zd bea         
+save $main/data2/tmp3, replace
+
+
+*  THIS IS THE CHANGE IN FOCAL FIRM
+clear
+u $main/data2/tmp1
+rename iv8 hh8
+collapse hh8 , by(year zd bea org_new2)
+sort year zd bea
+
+merge m:1  year zd bea using $main/data2/tmp3
+tab _merge
+drop _merge
+
+* NOW I SUBTRACT THE CHANGE IN FOCAL FIRM FROM THE TOTAL SO THAT THE INSTRUMENT DOES NOT CONTAIN FOCAL FIRM
+replace iv8 = iv8 - hh8 if hh8 ~=.
+
+sort bea year zd org_new2
+save $main/data2/iv_data_new, replace
+summ
+
+
+
+
+

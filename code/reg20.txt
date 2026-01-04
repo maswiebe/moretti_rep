@@ -1,0 +1,605 @@
+********************************************************************
+********************************************************************
+********************************************************************
+* I ESTIMATE A NUMBER OF EXTENSIONS AND ROBUSNESS CHECKS
+* I ALSO COMPUTE  NEW SUMMARY STATS 
+********************************************************************
+********************************************************************
+********************************************************************
+
+clear
+u $main/data2/data_3
+
+egen total = sum(number), by(inventor)
+
+* INCLUDE THE FOLLOWING 6 LINES IF YOU DON'T WANT INTERPOLATED DATA
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+
+* CLUSTER SIZE 
+g x   = log(Den_bea_zd    )
+sort inventor year
+by inventor : g  x_m1 = x[_n-1]
+by inventor : g  x_m2 = x[_n-2]
+by inventor : g  x_m3 = x[_n-3]
+by inventor : g  x_m4 = x[_n-4]
+by inventor : g  x_m5 = x[_n-5]
+by inventor : g  x_p1 = x[_n+1]
+by inventor : g  x_p2 = x[_n+2]
+by inventor : g  x_p3 = x[_n+3]
+by inventor : g  x_p4 = x[_n+4]
+by inventor : g  x_p5 = x[_n+5]
+
+
+drop if year  ==.
+drop if zd ==.
+drop if bea ==.
+egen org_new2 = group(org_id) if org_id ~= ""
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+
+* NUMBER OF PATENTS IN A YEAR
+g y = log(number)
+
+* CITATIONS
+* To avoid dropping the 0's, I add 0.00001
+g y2 = log(citations+0.00001)
+g y3 = log( (citations+0.00001) / number) 
+
+* SPECIALIZATION
+*g y4 = 1-general
+
+* NUMBER OF FIRMS
+g x3  = log(Den_bea_zdB) 
+
+
+***********************
+***********************
+* STAR INVENTORS
+* top 10% = 3.25
+***********************
+***********************
+keep if total  >=3.25
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* NEW VARIABLES
+********************************************************************
+********************************************************************
+********************************************************************
+egen cluster1               = group(bea zd)
+egen cluster0               = group(bea zd year)
+egen cluster2               = group(bea )
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_bea_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_bea_class      = group(bea class)
+egen cluster_class_year     = group(class year)
+egen org_new                = group(org_id)
+egen cluster_org_year       = group(org_new year)
+egen org_size               = count(inventor), by(org_new year)
+egen lab_size              = count(inventor), by(org_new year bea)
+
+
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y y2 y3  x
+summ number, detail
+summ x Den_bea_zd , detail
+tab zd
+
+
+save $main/data2/tmp10, replace
+
+********************************************************************
+********************************************************************
+********************************************************************
+* NON LINEARITIES
+********************************************************************
+********************************************************************
+********************************************************************
+g x_sq = x*x
+g x_cu = x*x*x
+reghdfe y x x_sq x_cu, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new ) vce(cluster cluster1) keepsin
+
+test x_sq = x_cu = 0
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* CROSS-FIELD SPILLOVERS 
+********************************************************************
+********************************************************************
+********************************************************************
+sort bea year
+merge m:1 bea year using $main/data2/density14_3_reshaped
+drop _merge
+
+
+
+* Average cluster size in other fields in the same city
+******************
+
+egen x_other_fields1 = rowmean(density2 density3 density4 density5) if zd ==1
+egen x_other_fields2 = rowmean(density1 density3 density4 density5) if zd ==2
+egen x_other_fields3 = rowmean(density1 density2 density4 density5) if zd ==3
+egen x_other_fields4 = rowmean(density1 density2 density3 density5) if zd ==4
+egen x_other_fields5 = rowmean(density1 density2 density3 density4) if zd ==5
+g       x_other_fields = x_other_fields1 if zd ==1
+replace x_other_fields = x_other_fields2 if zd ==2
+replace x_other_fields = x_other_fields3 if zd ==3
+replace x_other_fields = x_other_fields4 if zd ==4
+replace x_other_fields = x_other_fields5 if zd ==5
+
+* Logs
+replace x_other_fields = log(x_other_fields)
+replace density1 = log(density1)
+replace density2 = log(density2)
+replace density3 = log(density3)
+replace density4 = log(density4)
+replace density5 = log(density5)
+
+* Correlations 
+reg x_other_fields x
+
+reghdfe x_other_fields x, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+* Cross-field spillovers -- All fields together
+eststo: reghdfe y x x_other_fields, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+* Cross-field spillovers --  5 X 5 matrix
+* Note: I need to drop bea*year effects due to multicollinearity
+
+eststo: reghdfe y density1 density2 density3 density4 density5 if zd ==1, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+eststo: reghdfe y density1 density2 density3 density4  density5 if zd ==2, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+eststo: reghdfe y density1 density2 density3 density4  density5 if zd ==3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+eststo: reghdfe y density1 density2 density3 density4 density5 if zd ==4, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+eststo: reghdfe y density1 density2 density3 density4  density5 if zd==5, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+esttab using tables20/table3.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table3, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+*****************************************
+**********************************************
+* MEASURES OF CLUSTER SIZE THAT PUT MORE WEIGHT ON BETTER INVENTORS 
+**********************************************
+**********************************************
+sort  inventor year 
+merge m:1 inventor year using $main/data2/density14_W
+tab _merge
+drop _merge 
+
+
+* WEIGHT INVENTORS BASED ON NUMBER OF PATENTS OR CITATIONS
+g x6   = log(Den_bea_zd_WW4)
+
+eststo: reghdfe y x6, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+* COUNT INVENTORS WITH NUMBER OF PATENTS ABOVE A CERTAIN THRESHOLD
+drop x6
+g x6   = log(Den_bea_zd_WW1 )
+
+eststo: reghdfe y x6, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+* WEIGHT INVENTORS BASED ON NUMBER OF PATENTS 
+drop x6
+g x6   = log(Den_bea_zd_W4)
+
+eststo: reghdfe y x6, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+* COUNT INVENTORS WITH NUMBER OF CITATIONS ABOVE A CERTAIN THRESHOLD
+drop x6
+g x6   = log(Den_bea_zd_W1 )
+
+eststo: reghdfe y x6, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* TEAMS 
+********************************************************************
+********************************************************************
+********************************************************************
+summ team team2, detail
+
+* Control for quadratic in team size
+drop x6
+g x6 = x
+g team_sq = team*team
+eststo: reghdfe y x6 team team_sq, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+* Density is measured excluding all members of the team
+sort  inventor year
+merge m:1 inventor_id year using $main/data2/density_team
+drop _merge
+drop x6
+g x6   = log(density14_team)
+
+eststo: reghdfe y x6, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+
+* Interact x with indicator for large team size
+g cc = (team >=2)
+g x_cc = x*cc
+eststo: reghdfe y x6 x_cc cc , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+* Solo inventors  -- Interactions
+* Team2 is the share of patents that an inventor created alone in a given year
+g jj      = (team2 >=.9)
+g x_team2 = x*(team2 >=.9)
+drop x6
+g x6 =x
+eststo: reghdfe y x6 x_team2 jj, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+esttab using tables20/table87.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table87, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* ADDITIONAL SPECIFICATIONS
+********************************************************************
+********************************************************************
+********************************************************************
+
+**********************************************
+* Density defined at city level 
+* std errors are clustered by city
+* I need to drop city*year effects
+g xx   = log(Den_bea    )
+eststo: reghdfe y xx , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new) vce(cluster cluster2) keepsin
+
+
+**********************************************
+* std errors are clustered by city in main model 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster2) keepsin
+
+
+
+*************************************************************
+* Lifecycle controls 
+sort inventor year
+by inventor: g ttt = _n
+g first_year = year if ttt ==1
+egen first_year2 = min(first_year), by(inventor)
+g age = year - first_year2
+summ year ttt first*
+drop ttt first_*
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  age                                 ) vce(cluster cluster1) keepsin
+
+
+esttab using tables20/table7.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table7, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+********************************************************
+****************************************************
+************************************************
+* Field Specific coefficients (REF 1)
+* need to drop city*year effects
+************************************************
+****************************************************
+*******************************************************
+* Comp
+eststo: reghdfe y x if zd ==2, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+* Bio
+eststo: reghdfe y x if zd ==1, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+* Semi
+eststo: reghdfe y x if zd ==5, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+* Other eng
+eststo: reghdfe y x if zd ==3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+* Other Sci
+eststo: reghdfe y x if zd ==4, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor org_new                                   ) vce(cluster cluster1) keepsin
+
+esttab using tables20/table8.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table8, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+*************************************************************
+*************************************************************
+*************************************************************
+* Heterogeneity of the effect by firm productivity 
+*************************************************************
+*************************************************************
+*************************************************************
+egen firm_output = mean(y), by(org_new zd)
+
+summ firm_output , detail
+egen pctile25 = pctile(firm_output) if y~=., p(25) by(zd )
+egen pctile50 = pctile(firm_output) if y~=., p(50) by(zd )
+egen pctile75 = pctile(firm_output) if y~=., p(75) by(zd )
+g dd1 = 0 if firm_output ~=.
+g dd2 = 0 if firm_output ~=.
+g dd3 = 0 if firm_output ~=.
+g dd4 = 0 if firm_output ~=.
+replace dd1 =1 if firm_output                            <= pctile25 & firm_output ~=.
+replace dd2 =1 if firm_output  > pctile25 & firm_output  <= pctile50 & firm_output ~=.
+replace dd3 =1 if firm_output  > pctile50 & firm_output  <= pctile75 & firm_output ~=.
+replace dd4 =1 if firm_output  > pctile75                            & firm_output ~=.
+summ dd1 dd2 dd3 dd4
+
+g x_dd1 = x*dd1
+g x_dd2 = x*dd2
+g x_dd3 = x*dd3
+g x_dd4 = x*dd4
+
+
+
+eststo: reghdfe y x_dd1 x_dd2 x_dd3 x_dd4 dd1 dd2 dd3 dd4, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year ) vce(cluster cluster1) keepsin
+
+test x_dd1 =x_dd2 =x_dd3 =x_dd4
+
+eststo: reghdfe y x_dd1 x_dd2 x_dd3 x_dd4 dd1 dd2 dd3 dd4, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new) vce(cluster cluster1) keepsin
+
+test x_dd1 =x_dd2 =x_dd3 =x_dd4
+
+
+esttab using tables20/table2.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table2, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+*************************************************************
+*************************************************************
+*************************************************************
+* QUALITY: LOCAL CITATIONS RECEIVED 
+*************************************************************
+*************************************************************
+*************************************************************
+clear
+u $main/data2/tmp10
+merge 1:1 inventor year using $main/data2/citations_received
+drop _merge
+
+* Number of citations received by an inventor in a given year that are from same bea
+summ same_bea
+g y2_local = log(  (citations*same_bea)+0.00001)
+g y3_local = log(( (citations*same_bea) +0.00001) / number)
+* Number of citations received by an inventor in a given year that are from different bea
+g y2_nolocal = log(  (citations*(1-same_bea))+0.00001)
+g y3_nolocal = log(( (citations*(1-same_bea)) +0.00001) / number)
+
+
+* Local 
+g YY = y2_local 
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin
+
+* No Local
+drop YY
+g YY = y2_nolocal 
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin
+
+esttab using tables20/table6.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table6, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+* Local
+drop YY
+g YY = y3_local 
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin
+
+* No local
+drop YY
+g YY = y3_nolocal
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin
+
+esttab using tables20/table7.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table7, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+*************************************************************
+*************************************************************
+*************************************************************
+* QUALITY: GENERALITY AND ORIGINALITY 
+*************************************************************
+*************************************************************
+*************************************************************
+summ general original
+drop YY
+g YY = general
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+drop YY
+g YY = original  
+eststo: reghdfe YY x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+eststo clear
+
+
+
+*************************************************************
+*************************************************************
+*************************************************************
+* LOCAL CITATIONS MADE 
+*************************************************************
+*************************************************************
+*************************************************************
+* identify stars
+clear
+u $main/data2/tmp10
+g star =1
+collapse star, by(inventor_id)
+sort inventor_id
+save $main/data2/stars, replace
+
+
+clear
+u $main/data2/citations_made
+sort inventor_id
+merge m:1 inventor_id using $main/data2/stars
+
+
+* Descriptive means:
+g diff_zd = 1-same_zd 
+summ same_bea same_zd diff_zd same_bea_zd  same_bea_diff_zd if star ==1
+summ same_bea same_zd diff_zd same_bea_zd  same_bea_diff_zd if star ~=1
+clear
+
+
+* Effect of cluster size on citations, local citations, share of local citations
+u $main/data2/tmp10
+sort inventor_id year
+merge 1:1 inventor_id year using $main/data2/citations_made
+
+keep if x ~=.
+summ x, detail
+g N_same_bea = log(citations_made*same_bea )
+g log_citations_made = log(citations_made)
+
+g N_same_bea2 = log(citations_made*same_bea + 0.001)
+g log_citations_made2 = log(citations_made + 0.001)
+
+
+summ citations_made
+g vv = citations_made*same_bea 
+summ vv
+g vvv = citations_made*same_zd
+summ vvv
+
+
+
+summ log_citations_made 
+summ log_citations_made2 
+
+summ N_same_bea 
+summ N_same_bea2 
+
+summ same_bea 
+summ same_zd
+
+
+g YY = log_citations_made 
+eststo: reghdfe YY x, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+drop YY
+g YY = log(citations_made/number)
+eststo: reghdfe YY x, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+drop YY
+g YY =same_bea
+eststo: reghdfe YY x, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+drop YY
+g YY = same_zd
+eststo: reghdfe YY x, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+
+esttab using tables20/table72.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables20/table72, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+**********************************************
+* I estimate baseline model on inventors who tend to cite patents in same field
+* same_zd is a share, not a dummy
+summ same_zd, detail 
+g bb = (same_zd>=.9)
+g x_bb = x*bb
+eststo: reghdfe y x x_bb bb , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+
+
+
+
+***************************************
+* SUMMARY STATISTICS 
+****************************************
+clear
+* patent level data
+u $main/data2/data_patent_level_3
+sort inventor_id
+merge m:1 inventor_id using $main/data2/stars
+tab _merge
+drop _merge
+replace star = 0 if star ==.
+
+* tag one obs in each patent-city combination
+sort patent_id bea
+by patent_id bea: g hhh = _n
+g h2 = 1 if hhh ==1
+
+preserve
+collapse star citations general original (count) team_size = inventor_id (sum) n_star = star n_bea = h2, by(patent_id)
+summ
+
+* team size
+summ team_size if n_star >=1
+summ team_size if n_star ==1
+summ team_size if n_star ==0
+
+* share of stars in a team
+sum star
+* number of stars in a team
+sum n_star
+
+* number of cities in the team
+summ n_bea if n_star >=1
+summ n_bea if n_star ==0
+
+* number and type of citations
+summ citations if n_star >=1
+summ citations if n_star ==0
+summ general if n_star >=1
+summ general if n_star ==0
+summ original if n_star >=1
+summ original if n_star ==0
+
+
+********************************
+* number of fields an by inventor
+restore
+sort inventor_id zd2
+by inventor_id zd2: g first = _n
+keep if first ==1
+
+collapse  (count) zd2, by(inventor_id star)
+summ zd2 if star ==1
+summ zd2 if star ==0
+
+
+
+

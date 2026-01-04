@@ -1,0 +1,14 @@
+* Source: Kodak: http://www.1stock1.com/1stock1_173.htm
+insheet using $main/data/kodak_stock.csv
+
+rename ending price
+list year price
+
+destring price, replace
+keep if year >=1990 & year <2010
+
+line  price year , legend(off) lpattern(solid dot  dot)  lcolor(black black black)  saving($main/tables/kodak_stock,replace)
+graph export $main/tables/kodak_stock.pdf, replace
+
+
+

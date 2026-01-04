@@ -1,0 +1,81 @@
+
+*****************************************************
+* First I assign a bea to cited patents
+*****************************************************
+u $main/data2/data_patent_level_3
+keep patent_id bea 
+rename patent_id cite_to_patent
+rename bea  bea_cited_to
+sort cite_to_patent
+save $main/data2/tmp, replace
+
+
+u $main/data/patent_citations.dta
+keep cite_to_patent cite_from_patent
+sort  cite_to_patent
+merge m:m cite_to_patent using $main/data2/tmp
+drop if _merge ==2
+drop _merge
+save $main/data2/tmp2, replace
+
+
+
+*****************************************************
+* Now I assign a bea  to citing patents
+*****************************************************
+u $main/data2/data_patent_level_3
+keep patent_id  bea
+rename patent_id cite_from_patent
+rename bea  bea_cited_from
+sort cite_from_patent
+save $main/data2/tmp3, replace
+
+
+u $main/data2/tmp2
+sort  cite_from_patent
+merge m:m cite_from_patent using $main/data2/tmp3
+drop if _merge ==2
+drop _merge
+
+g same_bea = (bea_cited_from == bea_cited_to)
+summ
+
+collapse same_bea , by(cite_to_patent)
+
+rename cite_to_patent patent_id
+sort patent_id
+summ
+save $main/data2/tmp4, replace
+clear
+
+
+*****************************************************
+*****************************************************
+******************************************************
+******************************************************
+u $main/data2/data_patent_level_3
+sort patent_id
+merge m:1 patent_id using $main/data2/tmp4
+tab _merge
+drop _merge
+
+
+* In cases where there are multiple cities, pick mode
+* I use  maxmode to deal with ties. Later I will try minmode to see if it makes a difference
+egen main_bea        = mode(bea),     maxmode by(inventor_id year)
+
+
+* Collapse by inventor_id year. 
+summ
+sort inventor_id year  
+collapse main_bea same_bea , by(inventor_id year)
+
+rename main_bea bea_code
+drop if inventor ==.
+
+save $main/data2/citations_received, replace
+summ
+
+
+
+

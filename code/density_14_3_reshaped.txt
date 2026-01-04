@@ -1,0 +1,9 @@
+
+use $main/data2/density14_3
+drop density14B
+rename density14 density
+reshape wide density, i(bea year) j(zd)
+summ
+sort bea year
+save  $main/data2/density14_3_reshaped, replace
+

@@ -1,0 +1,194 @@
+********************************************************************
+********************************************************************
+********************************************************************
+* DIFFERENT TIME UNIT (1,2,3,6 MONTHS, 2, 3 YEAR)  -- SUPERSTARS
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+
+*****************
+* 1 MONTH
+*****************
+clear
+u $main/data2/data_4a
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x 
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1) keepsin 
+
+
+*****************
+* 2 MONTHS
+*****************
+clear
+u $main/data2/data_4e
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1)  keepsin 
+
+*****************
+* 3 MONTH
+*****************
+clear
+u $main/data2/data_4f
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1)  keepsin 
+
+
+*****************
+* 6 MONTH
+*****************
+clear
+u $main/data2/data_4b
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x 
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1) keepsin 
+
+*****************
+* 1 YEAR
+*****************
+clear
+u $main/data2/data_3
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new                = group(org_id)
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x 
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1) keepsin 
+
+*****************
+* 2 YEAR
+*****************
+clear
+u $main/data2/data_4c
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x 
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1) keepsin 
+
+*****************
+* 3 YEAR
+*****************
+clear
+u $main/data2/data_4d
+egen total = sum(number), by(inventor)
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_class_year     = group(class year)
+egen cluster_bea_class      = group(bea class)
+egen org_new2               = group(org_new)
+drop org_new
+
+
+keep if total  >=13.6
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y x 
+
+eststo: reghdfe y x , absorb(year bea zd class cluster_bea_year cluster_zd_year cluster_class_year inventor cluster1 cluster_bea_class cluster_class_year org_new) vce(cluster cluster1) keepsin 
+esttab using tables34/table9.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables34/table9.txt, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+*restore
+

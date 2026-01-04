@@ -1,0 +1,330 @@
+
+********************************************************************
+********************************************************************
+********************************************************************
+* KODAK -- MATCHING  
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+u $main/data2/data_3 
+
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_bea_class      = group(bea class)
+
+
+
+******************************************************************************
+* SAMPLE
+* I KEEP ONLY NON-KODAK INVENTORS
+* I KEEP ONLY 96 and 07
+******************************************************************************
+g kodak = 1 if org_id =="FI_1757"
+g xerox = 1 if org_id =="FI_6225"
+
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+*keep if kodak ~=1
+drop if class ==396 | class ==399 
+keep if year ==1996 | year ==2007
+
+keep if kodak ~=1
+
+
+* DUMMIES
+****************
+* rochester dummy
+g roch = 0
+replace roch = 1 if bea ==139
+
+* dummy for 2007
+g       after = 0 if year ==1996
+replace after = 1 if year ==2007
+
+* Rochester * 2007
+g roch_after = roch*after
+
+
+
+
+* Compute population distribution in bea-level data
+preserve
+clear
+u $main/data/read
+sum
+g roch = 0
+replace roch = 1 if bea ==139
+summ pop if roch ==1
+summ pop if roch ~=1, detail
+clear
+
+
+* Add Population and other covariates
+restore
+sort bea
+merge m:1 bea using $main/data/read
+drop _merge
+
+
+* Mean productvity and field distribution in 1996, by city
+preserve
+keep if year ==1996
+g y_bea = y
+g D1 = (zd2==1)
+g D2 = (zd2==2)
+g D3 = (zd2==3)
+g D4 = (zd2==4)
+g D5 = (zd2==5)
+
+collapse y_bea D1 D2 D3 D4 D5, by(bea_code)
+
+
+summ y_bea if bea ==139, detail
+summ y_bea if bea ~=139, detail
+sort bea
+save tables22/bea_data, replace
+clear
+
+
+
+**************************************************************
+**************************************************************
+**************************************************************
+**************************************************************
+* VERSION 1:  WEIGHT
+**************************************************************
+**************************************************************
+**************************************************************
+**************************************************************
+restore
+merge m:1 bea_code using $main/tables22/bea_data
+drop  _merge
+save tmp22, replace
+
+
+summ D1-D5 if roch ==1 & year ==1996
+
+* D1 D3 and D4 are the 3 largest fields in Roshester in 1996
+logit roch medfaminc90 trade90 agr90  const9 manuf90 nonwhite90 pop emp D1 D3 D4 y_bea if year == 1996
+
+predict  predicted
+summ year predicted
+g WW = 1/predicted if roch ==1
+replace WW = 1/(1-predicted) if roch ==0
+
+
+
+*****************
+* CROSS-SECIONAL
+*****************
+g cluster3 = bea
+preserve
+eststo:      reg y roch_after after roch [weight = WW],                                                      cluster(cluster3)
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(zd)                                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(cluster_zd_year)                              cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin
+
+esttab using tables22/table2.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table2, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+
+***************************
+* 2SLS
+***************************
+* First stage Effect on cluster size
+eststo: reg x roch_after after roch [weight = WW],                                                      cluster(cluster3)
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch [weight = WW], absorb(zd)                                           cluster(cluster3) keepsin
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch [weight = WW], absorb(cluster_zd_year)                              cluster(cluster3) keepsin
+test roch_after ==0
+eststo: reghdfe  x roch_after after roch [weight = WW], absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin
+test roch_after ==0
+esttab using tables22/table5.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table5, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+* IV
+eststo: ivreg     y (x =roch_after) after roch [weight = WW],                                  cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch [weight = WW], absorb(zd                      ) cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch [weight = WW], absorb(cluster_zd_year         ) cluster(cluster3)
+eststo: ivreghdfe y (x =roch_after) after roch [weight = WW], absorb(cluster1 cluster_zd_year) cluster(cluster3)
+
+
+esttab using tables22/table6.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table6, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+
+****************************************
+* WITHIN INVENTOR DIFFERENCES
+*****************************************
+restore
+egen zzz = count(y), by(inventor)
+tab zzz
+keep if zzz ==2
+drop zzz
+preserve
+
+
+* New rochester dummy for rochester status in 1996
+* Note: if in Rochester in 1996, this dummy stays =1 both in 1996 and  2007
+drop roch roch_after
+g       tmp6 = 0
+replace tmp6 = 1 if bea ==139 & year == 1996
+egen roch = max(tmp6), by(inventor)
+g roch_after = roch*after
+
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables22/table3.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table3, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+* New rochester dummy for rochester status in 1996 and 2007
+* Note: it is =1 only of inventor is in rochester both in 1996 and  2007
+clear
+restore
+drop roch roch_after
+
+g tmp6 = 1 if bea ==139 & year == 1996
+g tmp7 = 1 if bea ==139 & year == 2007
+egen tmp8 = max(tmp6), by(inventor)
+egen tmp9 = max(tmp7), by(inventor)
+g roch = 0
+replace roch = 1 if tmp8 ==1 & tmp9 ==1
+g roch_after = roch*after
+drop tmp*
+
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch [weight = WW], absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables22/table4.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table4, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+**************************************************************
+**************************************************************
+**************************************************************
+**************************************************************
+* VERSION 2: I DROP CITIES THAT ARE DIFFERENT FROM ROCHESTER
+* BASED ON INITIAL CHARACERISTICS
+**************************************************************
+**************************************************************
+**************************************************************
+**************************************************************
+clear
+u tmp22
+keep if pop  >=580511                   
+keep if medfaminc90 >= 27397
+keep if y_bea >= -.77 & y_bea <= -.57
+keep if D3 >= .40
+
+
+
+
+*****************
+* CROSS-SECIONAL
+*****************
+g cluster3 = bea
+eststo:      reg y roch_after after roch,                                                      cluster(cluster3)  
+eststo: reghdfe  y roch_after after roch, absorb(zd)                                           cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster_zd_year)                              cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin 
+
+esttab using tables22/table2b.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table2b, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+
+****************************************
+* WITHIN INVENTOR 
+*****************************************
+egen zzz = count(y), by(inventor)
+tab zzz
+keep if zzz ==2
+drop zzz
+preserve
+
+* New rochester dummy for rochester status in 1996
+* Note: if in Rochester in 1996, this dummy stays =1 both in 1996 and  2007
+drop roch roch_after
+g       tmp6 = 0
+replace tmp6 = 1 if bea ==139 & year == 1996
+egen roch = max(tmp6), by(inventor)
+g roch_after = roch*after
+
+eststo: reghdfe  y roch_after after roch, absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables22/table3b.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table3b, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+* New rochester dummy for rochester status in 1996 and 2007
+* Note: it is =1 only of inventor is in rochester both in 1996 and  2007
+clear
+restore
+preserve
+drop roch roch_after
+
+g tmp6 = 1 if bea ==139 & year == 1996
+g tmp7 = 1 if bea ==139 & year == 2007
+egen tmp8 = max(tmp6), by(inventor)
+egen tmp9 = max(tmp7), by(inventor)
+g roch = 0
+replace roch = 1 if tmp8 ==1 & tmp9 ==1
+g roch_after = roch*after
+drop tmp*
+
+eststo: reghdfe  y roch_after after roch, absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+esttab using tables22/table4b.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables22/table4b, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+rm tmp22.dta
+restore
+
+
+
+
+

@@ -1,0 +1,103 @@
+********************************************************************
+********************************************************************
+* This is like data_3, but instead of being at the inventor level it
+* is at the team level. ( Based on Referee #2 suggestion)
+*******************************************************************
+********************************************************************
+
+
+
+***********************************************
+***********************************************
+* CLEAN THE DATA
+***********************************************
+***********************************************
+u $main/data/COMETS_Patent_ExtractForEnrico
+
+keep if year >1970 & year <=2007
+egen inventor_id = group(inventor)
+drop if inventor_id ==.
+drop if class ==.
+
+drop if bea =="NOCOUNTRY"
+drop if bea =="OTHER_USA"
+drop if bea =="UNITED STATES"
+destring bea, replace
+drop if bea ==.
+drop if bea ==0
+
+* ZD is the broad technology class
+* Here I create a ZD2 which is the numeric version 
+egen zd2 = group(zd)
+tab zd zd2
+drop if zd2 ==.
+
+
+* Cases of  patents with multiple inventors
+*egen N = count(year), by(inventor_id patent_id)
+*summ N
+*drop N
+
+* MERGE WITH NBER PATENT DATA
+sort patent
+merge m:m patent using $main/data/apat63_99
+tab _merge
+summ
+drop _merge
+drop if inventor_id ==.
+
+
+
+****************************************************************
+*****************************************************************
+* DATA CHECK:
+* MULTIPLE CITIES AND TECHNOLOGY PER YEAR
+****************************************************************
+*****************************************************************
+* I drop if number of different cities or zd in a given year too large
+g N = 1
+sort inventor year bea
+by inventor year: replace N = N[_n-1] + 1 if bea ~= bea[_n-1] & _n >1
+egen NN = max(N), by(inventor)
+drop if NN > 3 & NN ~=.
+drop N NN
+
+g N = 1
+sort inventor year zd2
+by inventor year: replace N = N[_n-1] + 1 if zd2 ~= zd2[_n-1] & _n >1
+egen NN = max(N), by(inventor year)
+drop if NN > 3 & NN ~=.
+drop N NN
+
+
+***********************************************
+**************************************
+* MEASURES OF CLUSTERS DENSITY
+* I LEAVE OUT MEMBERS OF TEAM
+***************************************
+***********************************************
+
+* Team size: number of inventors on a patent
+egen team  = count(inventor_id), by(patent_id)
+summ team, detail
+egen tt  = mean(team), by(inventor_id year bea zd)
+sort inventor_id year bea zd 
+by inventor_id year bea zd: g d1 = 1 if _n ==1
+
+* this measure of densities varies across inventors depending on their mean 
+* team size 
+egen count = count(d1), by(bea zd year)
+egen total = count(d1), by(zd year)
+g density14_team = (count-tt)/(total-tt)
+
+
+sort inventor_id year
+collapse density14_team , by(inventor_id year)
+save $main/data2/density_team, replace
+summ
+
+
+
+
+
+

@@ -1,0 +1,483 @@
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* READ DATA
+********************************************************************
+********************************************************************
+********************************************************************
+clear
+u $main/data2/data_3
+
+egen total = sum(number), by(inventor)
+
+* INCLUDE THE FOLLOWING 6 LINES IF YOU DON'T WANT INTERPOLATED DATA
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+
+* CLUSTER SIZE 
+g x   = log(Den_bea_zd    )
+sort inventor year
+by inventor : g  x_m1 = x[_n-1]
+by inventor : g  x_m2 = x[_n-2]
+by inventor : g  x_m3 = x[_n-3]
+by inventor : g  x_m4 = x[_n-4]
+by inventor : g  x_m5 = x[_n-5]
+by inventor : g  x_p1 = x[_n+1]
+by inventor : g  x_p2 = x[_n+2]
+by inventor : g  x_p3 = x[_n+3]
+by inventor : g  x_p4 = x[_n+4]
+by inventor : g  x_p5 = x[_n+5]
+
+
+
+
+drop if year  ==.
+drop if zd ==.
+drop if bea ==.
+egen org_new2 = group(org_id) if org_id ~= ""
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+********************************************************************
+
+* NUMBER OF PATENTS IN A YEAR
+g y = log(number)
+
+* CITATIONS
+* To avoid dropping the 0's, I add 0.00001
+g y2 = log(citations+0.00001)
+g y3 = log( (citations+0.00001) / number) 
+
+* SPECIALIZATION
+*g y4 = 1-general
+
+* NUMBER OF FIRMS
+g x3  = log(Den_bea_zdB) 
+
+
+***********************
+***********************
+* STAR INVENTORS
+* top 10% = 3.25
+***********************
+***********************
+keep if total  >=3.25
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* NEW VARIABLES
+********************************************************************
+********************************************************************
+********************************************************************
+egen cluster1               = group(bea zd)
+egen cluster0               = group(bea zd year)
+egen cluster2               = group(bea )
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_bea_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_bea_class      = group(bea class)
+egen cluster_class_year     = group(class year)
+egen org_new                = group(org_id)
+egen cluster_org_year       = group(org_new year)
+egen org_size               = count(inventor), by(org_new year)
+egen lab_size              = count(inventor), by(org_new year bea)
+
+
+
+********************************************************************
+********************************************************************
+********************************************************************
+* REGRESSIONS
+********************************************************************
+********************************************************************
+********************************************************************
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+summ y y2 y3  x 
+summ number, detail
+summ x Den_bea_zd , detail
+tab zd
+
+
+***************************************
+*BASELINE
+***************************************
+
+* MAIN
+eststo: reghdfe y x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+
+esttab using tables/table1.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table1, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+* NON LINEARITIES
+summ x, detail
+egen pctile25 = pctile(x), p(25) by(zd year)
+egen pctile50 = pctile(x), p(50) by(zd year)
+egen pctile75 = pctile(x), p(75) by(zd year)
+g dd1 = 0
+g dd2 = 0
+g dd3 = 0
+g dd4 = 0
+replace dd1 =1 if x                <= pctile25
+replace dd2 =1 if x > pctile25 & x <= pctile50
+replace dd3 =1 if x > pctile50 & x <= pctile75
+replace dd4 =1 if x > pctile75
+g x_dd1 = x*dd1
+g x_dd2 = x*dd2
+g x_dd3 = x*dd3
+g x_dd4 = x*dd4
+summ dd1 dd2 dd3 dd4
+
+eststo: reghdfe y x_dd1 x_dd2 x_dd3 x_dd4 , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin
+test x_dd1 =x_dd2 =x_dd3 =x_dd4
+
+eststo: reghdfe y x_dd1 x_dd2 x_dd3 x_dd4 , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new) vce(cluster cluster1) keepsin
+test x_dd1 =x_dd2 =x_dd3 =x_dd4
+
+esttab using tables/table90.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table90, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+* CITATIONS
+eststo: reghdfe y2 x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin 
+eststo: reghdfe y2 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin
+esttab using tables/table4.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table4, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+eststo: reghdfe y3 x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin
+eststo: reghdfe y3 x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1) keepsin 
+esttab using tables/table5.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table5, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+* CLUSTER SIZE IS NUMBER OF FIRMS
+eststo: reghdfe y x3, absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x3, absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+esttab using tables/table11.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table11, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+***************************************
+* STAYERS 
+***************************************
+preserve
+
+* SAME CITY
+egen max = max(bea), by(inventor)
+egen min = min(bea), by(inventor)
+keep if max == min
+drop max min
+
+eststo: reghdfe y x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin 
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+esttab using tables/table7.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table7, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+* SAME CITY AND FIELD
+egen max = max(zd), by(inventor)
+egen min = min(zd), by(inventor)
+keep if max == min
+drop max min
+
+eststo: reghdfe y x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+esttab using tables/table71.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table71, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+* SAME FIELD
+restore
+preserve
+egen max = max(zd), by(inventor)
+egen min = min(zd), by(inventor)
+keep if max == min
+drop max min
+
+eststo: reghdfe y x , absorb(year bea zd class                                                                                        ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1                                                                               ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class                                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year                                             ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year                          ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor                 ) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year) vce(cluster cluster1) keepsin
+eststo: reghdfe y x , absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new                                   ) vce(cluster cluster1) keepsin
+esttab using tables/table72.tex, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+esttab using tables/table72, se  compress replace star(* 0.10 ** 0.05 *** 0.01)
+eststo clear
+
+
+
+***************************************
+*LEADS AND LAGS - BASELINE
+***************************************
+restore
+preserve
+eststo: reghdfe y x_p5 x_p4 x_p3 x_p2 x_p1 x x_m1 x_m2 x_m3 x_m4 x_m5 ,absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1)  
+eststo clear
+
+g b1 = _b[x_p5]
+g b2 = _b[x_p4]
+g b3 = _b[x_p3]
+g b4 = _b[x_p2]
+g b5 = _b[x_p1]
+g b6 = _b[x]
+g b7 = _b[x_m1]
+g b8 = _b[x_m2]
+g b9 = _b[x_m3]
+g b10= _b[x_m4]
+g b11= _b[x_m5]
+g se1  =_se[x_p5]
+g se2  =_se[x_p4]
+g se3  =_se[x_p3]
+g se4  =_se[x_p2]
+g se5  =_se[x_p1]
+g se6  =_se[x]
+g se7  =_se[x_m1]
+g se8  =_se[x_m2]
+g se9  =_se[x_m3]
+g se10 =_se[x_m4]
+g se11 =_se[x_m5]
+
+lincom x_p5 
+g bb1  = r(estimate)
+g sse1 = r(se)
+lincom x_p5 + x_p4 
+g bb2  = r(estimate)
+g sse2 = r(se)
+lincom x_p5 + x_p4 + x_p3 
+g bb3  = r(estimate)
+g sse3 = r(se)
+lincom  x_p5 + x_p4 + x_p3 + x_p2 
+g bb4  = r(estimate)
+g sse4 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 
+g bb5 = r(estimate)
+g sse5 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x 
+g bb6  = r(estimate)
+g sse6 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 
+g bb7  = r(estimate)
+g sse7 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 
+g bb8  = r(estimate)
+g sse8 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3 
+g bb9  = r(estimate)
+g sse9 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3 + x_m4 
+g bb10  = r(estimate)
+g sse10 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3 + x_m4 + x_m5
+g bb11  = r(estimate)
+g sse11 = r(se)
+
+keep if _n==1
+keep b1-b11 se1-se11 bb* sse*
+save beta1, replace
+
+clear
+u beta1
+g n=_n
+reshape long b se bb sse, i(n) j(j)
+g t = j-6
+g upper = b + 1.96*se
+g lower = b - 1.96*se
+
+
+line  b upper lower t , legend(off) lpattern(solid dot  dot)  lcolor(black black black)     xlabel(-5 "{&beta}{sub:5}" -4 "{&beta}{sub:4}" -3 "{&beta}{sub:3}" -2 "{&beta}{sub:2}" -1 "{&beta}{sub:1}" 0 "{&beta}{sub:0}" 1 "{&beta}{sub:-1}" 2 "{&beta}{sub:-2}" 3 "{&beta}{sub:-3}" 4 "{&beta}{sub:-4}" 5 "{&beta}{sub:-5}" ) saving(fig1,replace)
+graph export fig1.pdf, replace
+! mv -f beta1.dta tables/
+! mv -f fig1.pdf tables/
+! mv -f fig1.gph tables/
+
+drop upper lower
+g upper = bb + 1.96*sse
+g lower = bb - 1.96*sse
+
+
+line  bb upper lower t , legend(off) lpattern(solid dot  dot)  lcolor(black black black)     xlabel(-5 "{&mu}{sub:5}" -4 "{&mu}{sub:4}" -3 "{&mu}{sub:3}" -2 "{&mu}{sub:2}" -1 "{&mu}{sub:1}" 0 "{&mu}{sub:0}" 1 "{&mu}{sub:-1}" 2 "{&mu}{sub:-2}" 3 "{&mu}{sub:-3}" 4 "{&mu}{sub:-4}" 5 "{&mu}{sub:-5}" ) saving(fig1b,replace)
+graph export fig1b.pdf, replace
+! mv -f fig1b.pdf tables/
+! mv -f fig1b.gph tables/
+
+
+
+
+
+
+***************************************
+*LEADS AND LAGS - DRUGS
+***************************************
+restore
+preserve
+keep if class == 424 
+eststo: reghdfe y x_p5 x_p4 x_p3 x_p2 x_p1 x x_m1 x_m2 x_m3 x_m4 x_m5 ,absorb(year bea zd class cluster1 cluster_bea_class cluster_zd_year cluster_class_year inventor cluster_bea_year org_new  ) vce(cluster cluster1)
+eststo clear
+
+g b1 = _b[x_p5]
+g b2 = _b[x_p4]
+g b3 = _b[x_p3]
+g b4 = _b[x_p2]
+g b5 = _b[x_p1]
+g b6 = _b[x]
+g b7 = _b[x_m1]
+g b8 = _b[x_m2]
+g b9 = _b[x_m3]
+g b10= _b[x_m4]
+g b11= _b[x_m5]
+g se1  =_se[x_p5]
+g se2  =_se[x_p4]
+g se3  =_se[x_p3]
+g se4  =_se[x_p2]
+g se5  =_se[x_p1]
+g se6  =_se[x]
+g se7  =_se[x_m1]
+g se8  =_se[x_m2]
+g se9  =_se[x_m3]
+g se10 =_se[x_m4]
+g se11 =_se[x_m5]
+
+lincom x_p5
+g bb1  = r(estimate)
+g sse1 = r(se)
+lincom x_p5 + x_p4
+g bb2  = r(estimate)
+g sse2 = r(se)
+lincom x_p5 + x_p4 + x_p3
+g bb3  = r(estimate)
+g sse3 = r(se)
+lincom  x_p5 + x_p4 + x_p3 + x_p2
+g bb4  = r(estimate)
+g sse4 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1
+g bb5 = r(estimate)
+g sse5 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x
+g bb6  = r(estimate)
+g sse6 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1
+g bb7  = r(estimate)
+g sse7 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2
+g bb8  = r(estimate)
+g sse8 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3
+g bb9  = r(estimate)
+g sse9 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3 + x_m4
+g bb10  = r(estimate)
+g sse10 = r(se)
+lincom x_p5 + x_p4 + x_p3 + x_p2 + x_p1 + x + x_m1 + x_m2 + x_m3 + x_m4 + x_m5
+g bb11  = r(estimate)
+g sse11 = r(se)
+
+
+
+keep if _n==1
+keep b1-b11 se1-se11 bb* sse*
+save beta2, replace
+
+clear
+u beta2
+g n=_n
+reshape long b se bb sse, i(n) j(j)
+g t = j-6
+g upper = b + 1.96*se
+g lower = b - 1.96*se
+
+
+line  b upper lower t , legend(off) lpattern(solid dot  dot)  lcolor(black black black)     xlabel(-5 "{&beta}{sub:5}" -4 "{&beta}{sub:4}" -3 "{&beta}{sub:3}" -2 "{&beta}{sub:2}" -1 "{&beta}{sub:1}" 0 "{&beta}{sub:0}" 1 "{&beta}{sub:-1}" 2 "{&beta}{sub:-2}" 3 "{&beta}{sub:-3}" 4 "{&beta}{sub:-4}" 5 "{&beta}{sub:-5}" ) saving(fig2,replace)
+graph export fig2.pdf, replace
+! mv -f beta2.dta tables/
+! mv -f fig2.pdf tables/
+! mv -f fig2.gph tables/
+
+drop upper lower
+g upper = bb + 1.96*sse
+g lower = bb - 1.96*sse
+
+
+line  bb upper lower t , legend(off) lpattern(solid dot  dot)  lcolor(black black black)     xlabel(-5 "{&mu}{sub:5}" -4 "{&mu}{sub:4}" -3 "{&mu}{sub:3}" -2 "{&mu}{sub:2}" -1 "{&mu}{sub:1}" 0 "{&mu}{sub:0}" 1 "{&mu}{sub:-1}" 2 "{&mu}{sub:-2}" 3 "{&mu}{sub:-3}" 4 "{&mu}{sub:-4}" 5 "{&mu}{sub:-5}" ) saving(fig2b,replace)
+graph export fig2b.pdf, replace
+! mv -f fig2b.pdf tables/
+! mv -f fig2b.gph tables/
+
+
+
+
+restore
+*THE PART BELOW WAS MOVED TO REG23.DO
+

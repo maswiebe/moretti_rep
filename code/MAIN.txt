@@ -1,0 +1,107 @@
+global main ~/projects/patents_and_density/AER
+
+
+* Read COMETS data 
+include $main/data/create_COMETS_Patent_ExtractForEnrico.do
+clear all
+
+* Read APAT data
+include $main/data/read_apat
+clear  all
+
+* Read Input-Output Tables
+include $main/data/read1
+clear  all
+
+* Take Comets data and apat data and creates new variables
+include $main/data_3.do
+clear all
+
+* Figure 2 -- Top panel
+include $main/kodak_stock.do
+clear all
+
+
+* Table 2 (col 1 to 4) Table 4 (col 1 to 4); Fig 2 (bottom panel) and Fig 3
+include $main/reg3.do
+clear all
+include $main/reg27.do
+clear all
+
+
+* Table 2 (col 5) Table 4 (col 5)
+include $main/data/read
+clear
+include $main/reg22.do
+clear all
+
+
+*  Table 3, Table 6 (rows 1-8), 8 (top panel); Fig 5, Fig A1
+include $main/reg.do
+clear all
+
+*  Fig 6
+include $main/reg23.do
+clear all
+
+
+* Table 1, 10, 11, 12 (column1); Appendix Table A1; Fig 1 and 4
+include $main/reg2.do
+clear all
+
+
+* Table 12 (column2)
+include $main/reg29.do
+clear all
+
+* Creates iv data for regressions
+include $main/iv_new.do
+clear all
+
+
+* Table 5
+* Note: F-stat are in Main.log (llok for XXX FTEST)
+include $main/reg11.do
+clear all
+include $main/reg13.do
+clear all
+
+
+* Tab 6 (col 9,10); tab 7; tab8 (panel b); appendix tab A3, A5, A8
+include $main/data2/citations_received.do
+clear all
+include $main/data2/citations_made.do
+clear all
+include $main/data2/density_team.do
+clear all
+include $main/data2/density14_W.do
+clear all
+include $main/data2/density_14_3_reshaped.do 
+clear all
+include $main/reg20.do
+clear all
+
+
+* Appendix Table A2
+include $main/reg5.do
+clear all
+
+* Appendix Table A4
+include $main/reg36.do
+clear all
+
+* Appendix Table A6
+include $main/reg31.do
+clear all
+include $main/reg30.do
+clear all
+
+
+* Appendix Table A7
+include $main/data2/data_4.do
+clear all
+include $main/reg4.do
+clear all
+include $main/reg34.do
+clear all
+

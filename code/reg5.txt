@@ -1,0 +1,88 @@
+********************************
+* Firm specific spillovers
+********************************
+
+
+u $main/data2/data_3_count
+keep if year ==2007
+keep bea zd2 year count total
+summ
+
+sort bea zd 
+collapse count total, by(bea zd)
+save tmp, replace
+summ
+
+
+**********************************************************
+u $main/data2/data_patent_level_3
+drop if org_id ==""
+keep if year ==2007
+
+sort inventor_id bea zd
+by inventor_id  bea zd: g d1 = 1 if _n ==1
+
+g org_N = d1 
+sort org_norm org_id zd2 bea
+collapse (sum) org_N, by(org_norm org_id zd2 bea)
+summ
+
+* ADD COUNT data
+sort bea zd
+merge m:1 bea zd using tmp
+tab _merge
+drop _merge
+
+
+* IMPACT OF FIRM
+g share1 = org_N / count
+g D_prod = 0.066*( log(count/total) -  log((count-org_N)/total)  )
+
+summ share1 D_prod if zd ==2
+summ share1 D_prod if zd ==1
+summ share1 D_prod if zd ==5
+
+
+* COMPUTER SCIENCE
+* XXX SPILLOVERES
+preserve
+keep if zd2 ==2
+gsort -org_N
+g n = _n
+keep if n <= 100
+drop zd n
+list
+
+
+* BIOLOGY CHEMETYRY
+* XXX SPILLOVERS
+restore
+preserve
+keep if zd2 ==1
+gsort -org_N
+g n = _n
+keep if n <= 100
+drop zd n
+list
+
+
+* SEMICONDUCTORS
+restore
+preserve
+keep if zd2 ==5
+gsort -org_N
+g n = _n
+keep if n <= 100
+drop zd n
+list
+
+
+
+
+
+
+
+
+
+
+

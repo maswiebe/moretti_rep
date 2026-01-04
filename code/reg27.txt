@@ -1,0 +1,136 @@
+
+********************************************************************
+********************************************************************
+********************************************************************
+* KODAK - IO TABLES 
+********************************************************************
+********************************************************************
+********************************************************************
+
+u $main/data/read1
+summ
+summ value, detail
+rename class zd2
+sort zd
+save $main/data2/tmp27, replace
+
+
+
+
+********************************************************
+*****************************************
+*****************************************
+* PRODUCTIVITY 
+*****************************************
+*****************************************
+********************************************************
+clear
+u $main/data2/data_3 
+merge m:1 zd using $main/data2/tmp27
+tab _merge
+summ year zd value
+
+
+
+replace bea    =. if inter_bea   ==1
+replace zd     =. if inter_zd    ==1
+replace class  =. if inter_class ==1
+replace bea    =. if inter_bea2  ==1
+replace zd     =. if inter_zd2   ==1
+replace class  =. if inter_class2==1
+
+
+g y = log(number)
+g x   = log(Den_bea_zd    )
+
+egen cluster1               = group(bea zd)
+egen cluster_bea_year       = group(bea year)
+egen cluster_bea_zd_year    = group(bea zd year)
+egen cluster_class_year = group(bea class year)
+egen cluster_zd_year        = group(zd year)
+egen cluster_bea_class      = group(bea class)
+
+
+
+******************************************************************************
+* SAMPLE
+* I KEEP ONLY NON-KODAK INVENTORS
+* I KEEP ONLY 96 and 07
+******************************************************************************
+g kodak = 1 if org_id =="FI_1757"
+g xerox = 1 if org_id =="FI_6225"
+
+keep if y~=. & zd ~=. & class ~=. & year ~=. & inventor ~=. & cluster1 ~=. & bea ~=.
+keep if kodak ~=1
+drop if class ==396 | class ==399 
+keep if year ==1996 | year ==2007
+
+* DUMMIES
+****************
+* rochester dummy
+g roch = 0
+replace roch = 1 if bea ==139
+
+* dummy for 2007
+g       after = 0 if year ==1996
+replace after = 1 if year ==2007
+
+* Rochester * 2007
+g roch_after = roch*after
+
+
+
+*****************
+* CROSS-SECIONAL
+* DIFF IN DIFF
+*****************
+summ value, detail
+drop if value >0
+
+g cluster3 = bea
+preserve
+eststo:      reg y roch_after after roch,                                                      cluster(cluster3)  
+eststo: reghdfe  y roch_after after roch, absorb(zd)                                           cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster_zd_year)                              cluster(cluster3) keepsin 
+eststo: reghdfe  y roch_after after roch, absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin 
+* drop Xerox inventors
+eststo: reghdfe  y roch_after after roch if xerox ~=1, absorb(cluster1 cluster_zd_year)                     cluster(cluster3) keepsin 
+
+
+
+
+**********************************************
+****************************************
+* WITHIN INVENTOR DIFFERENCES
+* I ONLY KEEP INVENTORS OBSERVED IN 1996 and 2007
+*****************************************
+**********************************************
+restore
+egen zzz = count(y), by(inventor)
+tab zzz
+keep if zzz ==2
+drop zzz
+preserve
+
+
+* New rochester dummy for rochester status in 1996
+* Note: if in Rochester in 1996, this dummy stays =1 both in 1996 and  2007
+drop roch roch_after
+g       tmp6 = 0
+replace tmp6 = 1 if bea ==139 & year == 1996
+egen roch = max(tmp6), by(inventor)
+g roch_after = roch*after
+
+eststo: reghdfe  y roch_after after roch, absorb(inventor)                           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor zd)                        cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year)           cluster(cluster3) keepsin
+eststo: reghdfe  y roch_after after roch, absorb(inventor cluster_zd_year cluster1 ) cluster(cluster3) keepsin
+
+
+restore
+
+
+
+
+
+

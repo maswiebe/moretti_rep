@@ -1,0 +1,48 @@
+
+* Read Input-Output data  
+* Keep NAICS 333316	Photographic and photocopying equipment manufacturing
+insheet using $main/data/Use_SUT_Framework_2007_2012_DET.csv
+keep v1 v2 v92
+rename v1 naics
+rename v2 industry
+destring v92, replace
+keep if v92 ~=. & v92 >0 
+
+egen sum = sum(v92)
+g share = v92/sum
+rename v92 value
+drop sum 
+
+sort naics
+save $main/data/Use_SUT_Framework_2007_2012_DET, replace
+summ
+clear
+
+
+
+* Cross-walk from patents class  to industry NAICS
+* It's not one to one. It has assocated probabilities
+insheet using $main/data/uspc_Class_to_naics07_6.txt  
+rename naics naics
+rename uspc class
+
+
+* merge the two datasets
+tostring naics, replace
+sort naics
+merge m:1 naics using $main/data/Use_SUT_Framework_2007_2012_DET
+tab _merge
+drop if _merge ==2
+drop _merge
+
+* each class has multiple naics and attached probabilities. Here I use probabilities 
+* to compute the expected value of inputs used  by the photography industry
+replace value = 0 if value ==.
+collapse value [weight =probability], by(class)
+
+* Save
+sort class
+save $main/data/read1, replace
+summ
+
+
